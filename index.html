@@ -1,0 +1,261 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>大乐透单号频次与组合共现综合分析器</title>
+<style>
+:root{font-family:system-ui,-apple-system,"Segoe UI",sans-serif;color:#202733;background:#f3f5f8}
+*{box-sizing:border-box}body{margin:0;padding:16px;max-width:1200px;margin-inline:auto}
+h1{font-size:1.45rem;margin:.2rem 0 .4rem}.sub{color:#5e6877;font-size:.93rem;margin:0 0 16px}
+.panel{background:#fff;border:1px solid #dfe4eb;border-radius:14px;padding:16px;margin:12px 0;box-shadow:0 2px 8px #17203308}
+label{display:block;font-weight:650;margin:8px 0}.hint{font-size:.86rem;color:#697586;line-height:1.5}
+textarea,select{font:inherit;width:100%;border:1px solid #cbd3df;border-radius:9px;padding:10px;background:#fff;color:#202733}
+textarea{min-height:140px;resize:vertical;line-height:1.55}
+.row{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin-top:8px}
+.actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px}
+button{font:inherit;border:0;border-radius:9px;padding:10px 14px;background:#1d5fd1;color:#fff;cursor:pointer}
+button.secondary{background:#e8edf5;color:#253247}button:active{transform:translateY(1px)}
+.grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px}
+@media(max-width:1000px){.grid{grid-template-columns:1fr}.row{grid-template-columns:1fr}}
+table{width:100%;border-collapse:collapse;font-size:.92rem;margin-top:8px}
+th,td{text-align:left;border-bottom:1px solid #e5e9ef;padding:8px 6px}th{color:#596579}
+.num{font-variant-numeric:tabular-nums;font-weight:650}
+.warn{color:#a33a21;white-space:pre-wrap}
+</style>
+</head>
+<body>
+<h1>大乐透单号频次与组合共现综合分析器</h1>
+<p class="sub">本地离线运行 · 同屏展示单号出现次数 & 前区 2/3/4 码组合共现频次</p>
+
+<div class="panel">
+<label for="raw">输入历史注数</label>
+<textarea id="raw" spellcheck="false">05 14 23 25 30 + 04 12
+02 09 15 20 28 + 01 05
+04 10 17 18 26 + 08 11
+07 23 26 30 35 + 03 06
+01 02 19 27 30 + 05 07
+12 17 21 32 34 + 02 10
+04 06 12 14 24 + 04 09
+03 06 13 20 30 + 03 06
+01 06 15 26 28 + 09 10
+01 05 12 16 24 + 02 10
+05 14 23 25 29 + 04 11
+07 13 20 26 33 + 09 12
+02 04 13 18 20 + 03 10
+09 10 16 20 28 + 01 05
+06 11 17 30 34 + 05 06
+01 06 15 22 24 + 01 07
+03 19 22 29 35 + 02 07
+01 03 12 15 26 + 09 10</textarea>
+<div class="hint">每行一注，格式如：01 02 03 04 05 + 01 03</div>
+
+<div class="row">
+<div>
+  <label for="singleSort">单号排序方式</label>
+  <select id="singleSort">
+    <option value="freq_desc">频次从高到低 🔥</option>
+    <option value="num_asc">号码顺序 (01-35)</option>
+  </select>
+</div>
+<div>
+  <label for="comboSize">前区组合码数</label>
+  <select id="comboSize">
+    <option value="2">2 个号码组合（对子）</option>
+    <option value="3">3 个号码组合</option>
+    <option value="4">4 个号码组合</option>
+  </select>
+</div>
+<div>
+  <label for="minFreq">组合最低频次</label>
+  <select id="minFreq">
+    <option value="1">全部显示 (≥1次)</option>
+    <option value="2" selected>重复出现 (≥2次)</option>
+    <option value="3">高频出现 (≥3次)</option>
+  </select>
+</div>
+</div>
+
+<div class="actions">
+  <button id="calc">立即统计分析</button>
+  <button class="secondary" id="clear">清空输入</button>
+</div>
+<p id="status" class="warn" style="margin:8px 0 0 0"></p>
+</div>
+
+<div class="grid">
+<!-- 单号频次：前区 -->
+<div class="panel">
+  <h3 style="margin-top:0">前区单号出现频次</h3>
+  <table>
+    <thead><tr><th>号码</th><th>次数</th></tr></thead>
+    <tbody id="frontSingleTable"><tr><td colspan="2" class="hint">等待统计...</td></tr></tbody>
+  </table>
+</div>
+
+<!-- 单号频次：后区 -->
+<div class="panel">
+  <h3 style="margin-top:0">后区单号出现频次</h3>
+  <table>
+    <thead><tr><th>号码</th><th>次数</th></tr></thead>
+    <tbody id="backSingleTable"><tr><td colspan="2" class="hint">等待统计...</td></tr></tbody>
+  </table>
+</div>
+
+<!-- 组合共现频次 -->
+<div class="panel">
+  <h3 style="margin-top:0" id="comboTitle">前区多码组合频次</h3>
+  <div class="hint" style="margin-bottom:6px">同出一注的组合共现统计</div>
+  <table>
+    <thead><tr><th>号码组合</th><th>共现次数</th></tr></thead>
+    <tbody id="comboTable"><tr><td colspan="2" class="hint">等待统计...</td></tr></tbody>
+  </table>
+</div>
+</div>
+
+<script>
+const $ = id => document.getElementById(id);
+
+function parseNums(str, max) {
+  const parts = str.trim().split(/[\s,，、;；]+/);
+  return parts.map(x => {
+    const n = Number(x);
+    if (!Number.isInteger(n) || n < 1 || n > max) throw new Error("号码超出范围");
+    return n;
+  });
+}
+
+function getCombinations(arr, k) {
+  const results = [];
+  function backtrack(start, combo) {
+    if (combo.length === k) {
+      results.push(combo.slice());
+      return;
+    }
+    for (let i = start; i < arr.length; i++) {
+      combo.push(arr[i]);
+      backtrack(i + 1, combo);
+      combo.pop();
+    }
+  }
+  backtrack(0, []);
+  return results;
+}
+
+function runCalc() {
+  $('status').textContent = '';
+  try {
+    const raw = $('raw').value.trim();
+    if (!raw) throw new Error("请先输入历史注数。");
+    
+    const lines = raw.split(/\r?\n/).map(x => x.trim()).filter(Boolean);
+    const kSize = Number($('comboSize').value);
+    const minF = Number($('minFreq').value);
+    const sortMode = $('singleSort').value;
+
+    $('comboTitle').textContent = `前区 ${kSize} 个码组合共现频次`;
+
+    const frontCounts = {};
+    const backCounts = {};
+    const comboCounts = {};
+
+    lines.forEach((line, idx) => {
+      const halves = line.split(/[+＋|｜]/).map(x => x.trim()).filter(Boolean);
+      if (halves.length !== 2) throw new Error("第 " + (idx+1) + " 行格式错误，请用 + 分隔前后区。");
+      
+      const f = parseNums(halves[0], 35);
+      const b = parseNums(halves[1], 12);
+      
+      if (f.length !== 5 || b.length !== 2) throw new Error("第 " + (idx+1) + " 行号码数量不符（须前区5个、后区2个）。");
+
+      // 单号统计
+      f.forEach(n => frontCounts[n] = (frontCounts[n] || 0) + 1);
+      b.forEach(n => backCounts[n] = (backCounts[n] || 0) + 1);
+
+      // 组合共现统计
+      f.sort((x, y) => x - y);
+      const fCombos = getCombinations(f, kSize);
+      fCombos.forEach(c => {
+        const key = c.map(n => String(n).padStart(2, '0')).join(' ');
+        comboCounts[key] = (comboCounts[key] || 0) + 1;
+      });
+    });
+
+    renderSingleTable('frontSingleTable', frontCounts, sortMode);
+    renderSingleTable('backSingleTable', backCounts, sortMode);
+    renderComboTable('comboTable', comboCounts, minF);
+  } catch (e) {
+    $('status').textContent = e.message;
+  }
+}
+
+function renderSingleTable(tbodyId, counts, sortMode) {
+  const tbody = $(tbodyId);
+  tbody.replaceChildren();
+  
+  let keys = Object.keys(counts).map(Number);
+  if (sortMode === 'freq_desc') {
+    keys.sort((a, b) => counts[b] - counts[a] || a - b);
+  } else {
+    keys.sort((a, b) => a - b);
+  }
+
+  keys.forEach(k => {
+    const tr = document.createElement('tr');
+    const td1 = document.createElement('td');
+    const td2 = document.createElement('td');
+    td1.className = 'num';
+    td1.innerHTML = '<strong>' + String(k).padStart(2, '0') + '</strong>';
+    td2.className = 'num';
+    td2.textContent = counts[k] + ' 次';
+    tr.append(td1, td2);
+    tbody.append(tr);
+  });
+}
+
+function renderComboTable(tbodyId, comboMap, minF) {
+  const tbody = $(tbodyId);
+  tbody.replaceChildren();
+  
+  let list = Object.keys(comboMap).map(k => ({ combo: k, count: comboMap[k] }));
+  list = list.filter(item => item.count >= minF);
+  list.sort((a, b) => b.count - a.count || a.combo.localeCompare(b.combo));
+
+  if (list.length === 0) {
+    const tr = document.createElement('tr');
+    const td = document.createElement('td');
+    td.colSpan = 2; 
+    td.textContent = `未找到出现次数 ≥ ${minF} 次的组合`;
+    tr.appendChild(td); tbody.appendChild(tr);
+    return;
+  }
+
+  list.forEach((item, idx) => {
+    const tr = document.createElement('tr');
+    const td1 = document.createElement('td');
+    const td2 = document.createElement('td');
+    td1.className = 'num';
+    td1.innerHTML = '#' + (idx + 1) + ' &nbsp; <strong>' + item.combo + '</strong>';
+    td2.className = 'num';
+    td2.textContent = item.count + ' 次';
+    tr.append(td1, td2);
+    tbody.append(tr);
+  });
+}
+
+$('calc').addEventListener('click', runCalc);
+$('singleSort').addEventListener('change', runCalc);
+$('comboSize').addEventListener('change', runCalc);
+$('minFreq').addEventListener('change', runCalc);
+$('clear').addEventListener('click', () => {
+  $('raw').value = '';
+  $('frontSingleTable').innerHTML = '<tr><td colspan="2" class="hint">等待统计...</td></tr>';
+  $('backSingleTable').innerHTML = '<tr><td colspan="2" class="hint">等待统计...</td></tr>';
+  $('comboTable').innerHTML = '<tr><td colspan="2" class="hint">等待统计...</td></tr>';
+  $('status').textContent = '清理完成';
+});
+
+runCalc();
+</script>
+</body>
+</html>
